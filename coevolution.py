@@ -6,13 +6,14 @@ import matplotlib.pyplot as plt
 class CoevList(object):
     """
     Raptor (concatenated MSA) + Gremlin (coevolving pairs) list of coevolving pairs
+    between gene A and gene B
     """
     def __init__(self,pairlist,Alen,Astart=1,Bstart=1):
         """
         pairlist -> .txt outcome from gremlin server with all pairs
-        Alen -> integer lenght of the first gene
-        Adisp -> integer starting residue of the first gene
-        Bdisp -> integer startung residue of the second gene
+        Alen -> integer lenght of the gene A
+        Adisp -> integer starting residue of the gene A
+        Bdisp -> integer startung residue of the gene B
         """
         self.Alen = Alen
         self.Astart = Astart
@@ -22,10 +23,13 @@ class CoevList(object):
         self.parse_list()
      
     def parse_list(self):
+        """
+        Initialization function. It parses the list of coevolving residues according
+        to the initialization variables Alen, Astart and Bstart
+        """
         newpairlist=[]
         for pair in self.pairlist:
             newpair=[]
-            #print(pair)
             if int(pair[0]) <= self.ABbreak:
                 newpair.append(int(pair[0])+self.Astart-1)
                 newpair.append('A')
@@ -42,24 +46,41 @@ class CoevList(object):
                 newpair.append(int(pair[1])-self.ABbreak+self.Bstart-1)
                 newpair.append('B')
                 newpair.append(pair[3].split("_")[1])
-            #print(newpair)
             newpair.append(pair[-1])
             newpairlist.append(newpair)
         self.pairlist = np.asarray(newpairlist)
 
     def get_intrapairs(self):
+        """
+        Return a list with the intra coevolving pairs (residues from the same
+        gene A-A or B-B)
+        """
         newpairlist=[]
         for pair in self.pairlist:
             if pair[1]==pair[4]: newpairlist.append(pair)
         return(np.asarray(newpairlist))
     
     def get_interpairs(self):
+        """
+        Return a list with the inter coevolving pairs (residues from
+        different genes A-B)
+        """
         newpairlist=[]
         for pair in self.pairlist:
             if pair[1]!=pair[4]: newpairlist.append(pair)
         return(np.asarray(newpairlist))
 
     def add_distances(self,pdb,chainsA,chainsB,resomitA,resomitB):
+        """
+        Using a PDB structure of the proteins from which the coevolving pairs had been
+        calculated add an extra column to the list with the residue pairs minimum
+        distance among all their atoms
+        pdb -> directory to the pdb file
+        chainsA -> list of the pdb chains of the protein A
+        chainsB -> list of the pdb chains of the protein B
+        resomitA -> list of residues of the protein A not present in the PDB
+        resomitB -> list of residues of the protein B not present in the PDB
+        """
         newpairlist=[]
         parser = PDBParser()
         structure = parser.get_structure('structure',pdb)
@@ -86,6 +107,10 @@ class CoevList(object):
         self.pairlist = np.asarray(newpairlist)
             
     def get_minmResDist_chains(self,structure,res1,res2,chains1,chains2,resomit1,resomit2):
+        """
+        Compute the minimum distance between two residues (res1, res2) in 'structure'
+        by selecting the minimum one between chains1 and chains2
+        """
         if (int(res1) in resomit1) or (int(res2) in resomit2): return "-","-","-"
         mindistance = float("inf")
         for chain1 in chains1:
@@ -101,6 +126,10 @@ class CoevList(object):
 
     #Minimum distance between all atoms of two residues
     def minimResDist(self,structure,res1,res2):
+        """
+        Get the minimum distance between two residues (res1, res2)  in 'structure'
+        as the minimum distance of all their atoms
+        """
         mindistance = float("inf")
         res1_cont = structure[0][res1[0]][res1[1]]
         res2_cont = structure[0][res2[0]][res2[1]]
@@ -113,6 +142,11 @@ class CoevList(object):
 
 def get_BinaryClass(coevlist,dist_T,prob_T):
     """
+    Given a list of coevolving residues with the minimum distance of its parts,
+    perform a binary classification with a given distance and probability theshold
+    coevlist -> CoevList object
+    dist_T -> float distance threshold
+    prob_T -> float probability threshold
     """
     keys =["TP","FN","FP","TN"]
     values = [0] * 4
@@ -132,6 +166,13 @@ def get_BinaryClass(coevlist,dist_T,prob_T):
     return counts
 
 def plot_RocPlot(coevlist,dist_T,intervals=30):
+    """
+    Given a list of coevolving residues with the minimum distance of its parts and
+    a distance threshold, calculate its receaving operating curve (ROC curve)
+    coevlist -> CoevList object
+    dist_T -> float distance threshold
+    intervals -> integer
+    """
     opt_accuracy = 0
     opt_threshold_a = 0
     opt_precision = 0
@@ -180,37 +221,4 @@ def plot_RocPlot(coevlist,dist_T,intervals=30):
     dic = dict(zip(keys, values))
     print(dic)
     plt.show()
-    return dic
- 
-if __name__ == '__main__':
-   
-    #print("TssGF---------------------------------------------------------------") 
-    liGF = CoevList('data/coevolution/TssGF_pairs_raptorGremlin.txt',366)
-    liGF.add_distances(pdb='data/structures/6n38.pdb',chainsA=['G'],chainsB=['H','I'],resomitA=list(range(1,122))+list(range(331,337)),resomitB=list(range(1,47))+list(range(393,407)))
-    interliGF = liGF.get_interpairs()
-    for pair in interliGF:
-        #print(pair)
-        pass
-   
-    #print("TssKG---------------------------------------------------------------") 
-    liKG = CoevList('data/coevolution/TssKG_pairs_raptorGremlin.txt',445)
-    liKG.add_distances(pdb='data/structures/6n38.pdb',chainsA=['A','B','C','D','E','F'],chainsB=['G'],resomitA=list(range(1,2))+list(range(220,233))+list(range(312,446)),resomitB=list(range(1,122))+list(range(331,336)))    
-    interliKG = liKG.get_interpairs()
-    for pair in interliKG:
-        #print(pair)
-        pass
-
-    distThreshold = 8
-    
-    liGFKG = np.asarray(list(liGF.pairlist)+list(liKG.pairlist))
-    plot_RocPlot(liGFKG,dist_T=distThreshold)   
- 
-    print("TssKctdL---------------------------------------------------------------")
-
-    liKctdL = CoevList('data/coevolution/TssKctdL_pairs_raptorGremlin.txt',445,314)
-    interliKctdL = liKctdL.get_interpairs()
-    for pair in interliKctdL[0:10]:
-        print(pair)
-        pass
-
-
+    return dic 
