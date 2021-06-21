@@ -2,6 +2,10 @@ import numpy as np
 from Bio.PDB import *
 from Bio import *
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
+import sklearn
+from sklearn.isotonic import IsotonicRegression
+from sklearn.linear_model import LinearRegression
 
 class CoevList(object):
     """
@@ -67,8 +71,9 @@ class CoevList(object):
         """
         newpairlist=[]
         for pair in self.pairlist:
-            if pair[1]!=pair[4]: newpairlist.append(pair)
+            if pair[1]!=pair[4]: newpairlist.append(list(pair))
         return(np.asarray(newpairlist))
+        #return(newpairlist)
 
     def add_distances(self,pdb,chainsA,chainsB,resomitA,resomitB):
         """
@@ -140,6 +145,8 @@ class CoevList(object):
                     mindistance = distance
         return mindistance
 
+
+
 def get_BinaryClass(coevlist,dist_T,prob_T):
     """
     Given a list of coevolving residues with the minimum distance of its parts,
@@ -165,7 +172,28 @@ def get_BinaryClass(coevlist,dist_T,prob_T):
     counts = dict(zip(keys, values))
     return counts
 
-def plot_RocPlot(coevlist,dist_T,intervals=30):
+def plot_contact_isotonicReg(coevlist,dist_T):
+    problist=[]
+    isincontact=[]
+    for pair in coevlist:
+        if pair[7] == '-': continue
+        problist.append(float(pair[6]))
+        isincontact.append(1.0 if float(pair[7]) < dist_T else 0.0)
+    problist, isincontact = zip(*sorted(zip(problist, isincontact),reverse=False))
+    ir = IsotonicRegression(increasing=False).fit(problist,isincontact)
+    # Plot
+    plt.figure()
+    plt.yticks((0,1))
+    plt.plot(problist,isincontact,'o',label='TssGF/TssKG pairs',color='blue')
+    ir = IsotonicRegression(out_of_bounds="clip")
+    isincontact_ = ir.fit_transform(problist, isincontact)
+    plt.plot(problist,isincontact_, 'C1.-', markersize=5,color='orange',label='Isotonic Regression')
+    plt.axvline(x=0.9,color='black',linestyle='--',label='Threshold (0.9)')
+    plt.xlabel("Contact Probability",fontsize=13)
+    plt.legend()
+    plt.savefig("plots/isincontact.png")
+
+def plot_RocPlot(coevlist,dist_T,intervals=30,reg=False):
     """
     Given a list of coevolving residues with the minimum distance of its parts and
     a distance threshold, calculate its receaving operating curve (ROC curve)
@@ -197,12 +225,16 @@ def plot_RocPlot(coevlist,dist_T,intervals=30):
         if precision > opt_precision:
             opt_precision = precision
             opt_threshold_p = t
+    precisions = np.asarray(precisions)
+    thresholds = np.asarray(thresholds[:-1])
     values = zip(FPRs,TPRs)
     values = sorted(values,key=lambda x: x[0])
     values = np.asarray(values)
     FPRs = np.asarray(values[:,0])
     TPRs = np.asarray(values[:,1])
     auc = np.trapz(TPRs,x=FPRs)
+    # Plot ROC
+    plt.figure()
     plt.plot(FPRs,TPRs)
     plt.xlabel("False positive rate",fontsize=13)
     plt.ylabel("True positive rate",fontsize=13)
@@ -212,13 +244,28 @@ def plot_RocPlot(coevlist,dist_T,intervals=30):
     plt.legend()
     axes.set_xlim([0, 1])
     axes.set_ylim([0, 1])
+    # Get isotonic and linear regression for precision
+    if reg:
+        ir = IsotonicRegression(out_of_bounds="clip")
+        precisions_ = ir.fit_transform(thresholds, precisions)
+        #lr = LinearRegression()
+        #lr.fit(thresholds[:, np.newaxis], precisions)
+    # Plot evolution of precision
     plt.figure()
-    precisions = np.asarray(precisions)
-    thresholds = np.asarray(thresholds[:-1])
-    plt.plot(thresholds,precisions)
+    if reg:
+        plt.plot(thresholds,precisions_, 'C1.-', markersize=5,color='orange',label='Isotonic Regresion')
+        #plt.plot(thresholds, lr.predict(thresholds[:, np.newaxis]), 'C2-',color='green')
+    plt.plot(thresholds,precisions,'o',markersize=5,color='blue')
+    plt.xlabel("Contact Probability",fontsize=13)
+    plt.ylabel("Precision",fontsize=13)
+    plt.axvline(x=0.9,color='black',linestyle='--',label='Threshold (0.9)')
+    axes.set_xlim([0, 1])
+    axes.set_ylim([0, 1])
+    plt.legend()
+    plt.savefig("plots/precision.png")
+    # Return
     keys = ["Opt_Accuracy","Opt_Accuracy_T","Opt_Precision","Opt_Precision_T","AUC"]
     values = [opt_accuracy, opt_threshold_a, opt_precision, opt_threshold_p, auc]
     dic = dict(zip(keys, values))
     print(dic)
-    plt.show()
     return dic 
