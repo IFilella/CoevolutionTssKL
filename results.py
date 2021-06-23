@@ -1,3 +1,7 @@
+# Author: Isaac Filella Merce -- isaacfilella@gmail.com
+# https://www.linkedin.com/in/isaacfilella/
+# 2021-06-23 10:39:32 (UTC+0200)
+
 import coevolution
 import numpy as np
 import matplotlib.pyplot as plt
